@@ -1,22 +1,26 @@
+import os
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import List, Optional
 import firebase_admin
 from firebase_admin import credentials, firestore, storage
-from fastapi import FastAPI, HTTPException, File, UploadFile, Form
-from pydantic import BaseModel
-from typing import Optional, List
-from fastapi.middleware.cors import CORSMiddleware
-import os
+import json
 
-# Initialize Firebase Admin SDK
+# Initialize Firebase Admin
 cred = credentials.Certificate("assignment3-2865c-63775c0b75a2.json")
 firebase_admin.initialize_app(cred)
-
 db = firestore.client()
 
 app = FastAPI()
 
+# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Allow your React app's origin
+    allow_origins=[
+        "http://localhost:3000",  # Local development
+        "https://lucky-moonbeam-f4a2f3.netlify.app"  # Your Netlify URL
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -83,27 +87,22 @@ def create_lead(lead: LeadCreate):
     created_lead["id"] = doc_ref.id
     return created_lead 
 
-@app.put("/leads/{lead_id}/stage", response_model=Lead)
-def update_lead_stage(lead_id: str, stage_update: LeadUpdateStage):
+@app.put("/leads/{lead_id}", response_model=Lead)
+def update_lead(lead_id: str, lead_update: LeadCreate):
     doc_ref = db.collection("leads").document(lead_id)
     doc = doc_ref.get()
     if not doc.exists:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    doc_ref.update({"stage": stage_update.stage})
+    # Update the lead with the new data
+    update_data = lead_update.model_dump(exclude_unset=True)
+    doc_ref.update(update_data)
 
-    # If the lead stage is updated to "Won", create a new order
-    if stage_update.stage == "Won":
-        order_data = {
-            "lead_id": lead_id,
-            "status": "Order Received" # Default status for a new order from a won lead
-        }
-        db.collection("orders").document().set(order_data)
-
-    updated_lead_data = doc.to_dict()
-    updated_lead_data["stage"] = stage_update.stage # Update locally for response
-    updated_lead_data["id"] = doc.id
-    return updated_lead_data 
+    # Get the updated document
+    updated_doc = doc_ref.get()
+    updated_lead_data = updated_doc.to_dict()
+    updated_lead_data["id"] = updated_doc.id
+    return updated_lead_data
 
 @app.get("/leads", response_model=List[Lead])
 def get_leads(stage: Optional[str] = None, follow_up_date: Optional[str] = None):
@@ -315,4 +314,26 @@ async def delete_document(document_type: str, document_id: str, file_path: str):
         
         return {"message": "File deleted successfully"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) 
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/leads/{lead_id}/stage", response_model=Lead)
+def update_lead_stage(lead_id: str, stage_update: LeadUpdateStage):
+    doc_ref = db.collection("leads").document(lead_id)
+    doc = doc_ref.get()
+    if not doc.exists:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    doc_ref.update({"stage": stage_update.stage})
+
+    # If the lead stage is updated to "Won", create a new order
+    if stage_update.stage == "Won":
+        order_data = {
+            "lead_id": lead_id,
+            "status": "Order Received"  # Default status for a new order from a won lead
+        }
+        db.collection("orders").document().set(order_data)
+
+    updated_lead_data = doc.to_dict()
+    updated_lead_data["stage"] = stage_update.stage  # Update locally for response
+    updated_lead_data["id"] = doc.id
+    return updated_lead_data 

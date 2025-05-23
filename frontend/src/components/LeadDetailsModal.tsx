@@ -114,23 +114,35 @@ function LeadDetailsModal({ open, onClose, lead, onLeadUpdated }: LeadDetailsMod
   const handleUpdateLead = async () => {
     if (!editedLead) return;
 
-    // Exclude documents field from the update payload as documents are handled separately
     const { documents, ...updatePayload } = editedLead;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/leads/${editedLead.id}`, {
+      const response = await fetch(`${API_BASE_URL}/leads/${editedLead.id}/stage`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(updatePayload),
+        body: JSON.stringify({ stage: editedLead.stage }),
       });
 
       if (response.ok) {
-        onClose(); // Close modal on success
-        onLeadUpdated(); // Refresh lead list
+        // Update other fields
+        const updateResponse = await fetch(`${API_BASE_URL}/leads/${editedLead.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(updatePayload),
+        });
+
+        if (updateResponse.ok) {
+          onClose();
+          onLeadUpdated();
+        } else {
+          console.error('Error updating lead details:', updateResponse.status);
+        }
       } else {
-        console.error('Error updating lead:', response.status);
+        console.error('Error updating lead stage:', response.status);
       }
     } catch (error) {
       console.error('Error updating lead:', error);
@@ -140,21 +152,21 @@ function LeadDetailsModal({ open, onClose, lead, onLeadUpdated }: LeadDetailsMod
   const handleDeleteLead = async () => {
     if (!editedLead?.id) return;
 
-    try {
-      const response = await fetch(`${API_BASE_URL}/leads/${editedLead.id}`, {
-        method: 'DELETE',
-      });
+    if (window.confirm('Are you sure you want to delete this lead? This action cannot be undone.')) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/leads/${editedLead.id}`, {
+          method: 'DELETE',
+        });
 
-      if (response.ok) {
-        onClose(); // Close modal on success
-        onLeadUpdated(); // Refresh lead list
-      } else {
-        console.error('Error deleting lead:', response.status);
+        if (response.ok) {
+          onClose();
+          onLeadUpdated();
+        } else {
+          console.error('Error deleting lead:', response.status);
+        }
+      } catch (error) {
+        console.error('Error deleting lead:', error);
       }
-    } catch (error) {
-      console.error('Error deleting lead:', error);
-    } finally {
-      setEditedLead(null); // Clear selected lead
     }
   };
 
