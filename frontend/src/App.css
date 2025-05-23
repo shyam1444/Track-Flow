@@ -1,0 +1,218 @@
+.App {
+  text-align: center;
+  padding: 20px;
+  font-family: Arial, sans-serif;
+}
+
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-logo {
+    animation: App-logo-spin infinite 20s linear;
+  }
+}
+
+.App-header {
+  background-color: #f0f0f0;
+  padding: 10px 20px;
+  border-bottom: 1px solid #ccc;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.App-header h1 {
+  margin: 0;
+  font-size: 1.8em;
+}
+
+.App-header button {
+  margin-left: 10px;
+  padding: 8px 15px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background-color: #007bff;
+  color: white;
+}
+
+.App-header button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+section {
+  margin-bottom: 30px;
+  padding: 20px;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  background-color: #fff;
+  text-align: left;
+}
+
+section h2 {
+  margin-top: 0;
+  color: #333;
+}
+
+/* Form Styles */
+form div {
+  margin-bottom: 15px;
+}
+
+form label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+  color: #555;
+}
+
+form input[type="text"],
+form input[type="date"],
+form select,
+form textarea {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box; /* Include padding in width */
+}
+
+form textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+form button {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background-color: #28a745;
+  color: white;
+  font-size: 1em;
+}
+
+form button:hover {
+  background-color: #218838;
+}
+
+/* Table Styles */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 15px;
+}
+
+th,
+td {
+  border: 1px solid #ddd;
+  padding: 10px;
+  text-align: left;
+}
+
+th {
+  background-color: #f2f2f2;
+  font-weight: bold;
+}
+
+tr:nth-child(even) {
+  background-color: #f9f9f9;
+}
+
+tr:hover {
+  background-color: #e9e9e9;
+}
+
+/* Kanban Board Styles (Basic) */
+.kanban-board {
+  display: flex;
+  overflow-x: auto; /* Enable horizontal scrolling if columns exceed screen width */
+  padding-bottom: 10px; /* Add some space for scrollbar */
+}
+
+.kanban-column {
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 5px;
+  margin-right: 15px;
+  padding: 15px;
+  min-width: 250px; /* Minimum width for a column */
+  flex-shrink: 0; /* Prevent columns from shrinking */
+}
+
+.kanban-column h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  text-align: center;
+  color: #0056b3;
+}
+
+.kanban-card {
+  background-color: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+  cursor: grab;
+}
+
+.kanban-card h4 {
+  margin: 0 0 5px 0;
+  font-size: 1.1em;
+}
+
+.kanban-card p {
+  margin: 0 0 5px 0;
+  font-size: 0.9em;
+  color: #666;
+}
+
+/* Dashboard Styles */
+.dashboard .metrics-section {
+    margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid #e9ecef;
+    border-radius: 5px;
+    background-color: #f8f9fa;
+}
+
+.dashboard .metrics-section h3 {
+    margin-top: 0;
+    color: #0056b3;
+}
+
+.dashboard .metrics-section ul {
+    list-style: none;
+    padding: 0;
+}
+
+.dashboard .metrics-section li {
+    margin-bottom: 5px;
+    padding: 5px;
+    border-bottom: 1px solid #eee;
+}
+
+.App-link {
+  color: #61dafb;
+}
+
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
