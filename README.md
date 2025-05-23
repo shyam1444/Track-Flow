@@ -8,7 +8,7 @@ A web application to manage sales leads and orders, built with FastAPI, React, a
 -   **Frontend:** React
 -   **Database:** Firebase
 -   **Charting:** Chart.js
--   **Hosting:** Vercel
+-   **Hosting:** Netlify
 
 ## Project Structure
 
