@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import os
 
 # Initialize Firebase Admin SDK
-cred = credentials.Certificate("assignment3-2865c-firebase-adminsdk-fbsvc-d5c9190792.json")
+cred = credentials.Certificate("assignment3-2865c-63775c0b75a2.json")
 firebase_admin.initialize_app(cred)
 
 db = firestore.client()
@@ -248,72 +248,71 @@ def delete_order(order_id: str):
     return {"message": f"Order with ID {order_id} deleted successfully"}
 
 @app.post("/upload_document")
-async def upload_document(file: UploadFile = File(...), document_type: str = Form(...), document_id: str = Form(...)):
-    if document_type not in ['lead', 'order']:
-        raise HTTPException(status_code=400, detail="Invalid document type. Must be 'lead' or 'order'.")
-
-    # Determine Firestore collection and document reference
-    collection_name = "leads" if document_type == 'lead' else "orders"
-    doc_ref = db.collection(collection_name).document(document_id)
-    doc = doc_ref.get()
-
-    if not doc.exists:
-        raise HTTPException(status_code=404, detail=f"{document_type.capitalize()} with ID {document_id} not found")
-
-    # Upload file to Firebase Storage
-    file_path = f'{document_type}s/{document_id}/{file.filename}'
-    blob = bucket.blob(file_path)
-
-    # Use file.file to get the file-like object
-    blob.upload_from_file(file.file, content_type=file.content_type)
-
-    # Make the blob publicly readable (optional, depending on security requirements)
-    # blob.make_public()
-
-    # Get the public URL or gs:// path
-    # public_url = blob.public_url # Use if make_public() is called
-    storage_path = f'gs://{BUCKET_NAME}/{file_path}' # Use gs:// path
-
-    # Update the document in Firestore with the document reference
-    current_documents = doc.to_dict().get('documents', [])
-    current_documents.append(storage_path)
-    doc_ref.update({'documents': current_documents})
-
-    return {"message": "File uploaded successfully", "file_path": storage_path}
+async def upload_document(
+    file: UploadFile = File(...),
+    document_type: str = Form(...),
+    document_id: str = Form(...)
+):
+    try:
+        # Create a unique filename
+        file_extension = os.path.splitext(file.filename)[1]
+        unique_filename = f"{document_type}/{document_id}/{file.filename}"
+        
+        # Upload to Firebase Storage
+        blob = bucket.blob(unique_filename)
+        blob.upload_from_file(file.file)
+        
+        # Get the public URL
+        blob.make_public()
+        file_url = blob.public_url
+        
+        # Update the document in Firestore
+        if document_type == "lead":
+            doc_ref = db.collection("leads").document(document_id)
+        elif document_type == "order":
+            doc_ref = db.collection("orders").document(document_id)
+        else:
+            raise HTTPException(status_code=400, detail="Invalid document type")
+            
+        doc = doc_ref.get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail=f"{document_type.capitalize()} not found")
+            
+        # Update the documents array
+        current_data = doc.to_dict()
+        documents = current_data.get("documents", [])
+        documents.append(file_url)
+        doc_ref.update({"documents": documents})
+        
+        return {"message": "File uploaded successfully", "file_url": file_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.delete("/delete_document")
 async def delete_document(document_type: str, document_id: str, file_path: str):
-    if document_type not in ['lead', 'order']:
-        raise HTTPException(status_code=400, detail="Invalid document type. Must be 'lead' or 'order'.")
-
-    # Determine Firestore collection and document reference
-    collection_name = "leads" if document_type == 'lead' else "orders"
-    doc_ref = db.collection(collection_name).document(document_id)
-    doc = doc_ref.get()
-
-    if not doc.exists:
-        raise HTTPException(status_code=404, detail=f"{document_type.capitalize()} with ID {document_id} not found")
-
-    # Extract the storage path from the provided file_path (assuming it's the gs:// format)
-    # Expected format: gs://<bucket_name>/<document_type>s/<document_id>/<file_name>
     try:
-        path_parts = file_path.replace(f'gs://{BUCKET_NAME}/', '').split('/')
-        # The actual file path in storage is everything after the bucket name
-        storage_file_path = f'{path_parts[0]}/{path_parts[1]}/{path_parts[2]}' # This assumes the path structure
-
-        blob = bucket.blob(storage_file_path)
+        # Delete from Firebase Storage
+        blob = bucket.blob(file_path)
         blob.delete()
+        
+        # Update the document in Firestore
+        if document_type == "lead":
+            doc_ref = db.collection("leads").document(document_id)
+        elif document_type == "order":
+            doc_ref = db.collection("orders").document(document_id)
+        else:
+            raise HTTPException(status_code=400, detail="Invalid document type")
+            
+        doc = doc_ref.get()
+        if not doc.exists:
+            raise HTTPException(status_code=404, detail=f"{document_type.capitalize()} not found")
+            
+        # Update the documents array
+        current_data = doc.to_dict()
+        documents = current_data.get("documents", [])
+        documents = [doc for doc in documents if doc != file_path]
+        doc_ref.update({"documents": documents})
+        
+        return {"message": "File deleted successfully"}
     except Exception as e:
-        print(f"Error deleting file from storage: {e}")
-        raise HTTPException(status_code=500, detail="Failed to delete file from storage")
-
-    # Remove the document reference from Firestore
-    current_documents = doc.to_dict().get('documents', [])
-    if file_path in current_documents:
-        current_documents.remove(file_path)
-        doc_ref.update({'documents': current_documents})
-    else:
-        # This case should ideally not happen if UI is in sync with Firestore
-        print(f"Warning: Document path {file_path} not found in Firestore document {document_id}")
-
-    return {"message": "Document deleted successfully"} 
+        raise HTTPException(status_code=500, detail=str(e)) 

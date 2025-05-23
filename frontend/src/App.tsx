@@ -7,7 +7,6 @@ import Navbar from './components/Navbar';
 import Dashboard from './components/Dashboard';
 import LeadManagement from './components/LeadManagement';
 import OrderManagement from './components/OrderManagement';
-import LeadKanban from './components/LeadKanban';
 
 const theme = createTheme({
   palette: {

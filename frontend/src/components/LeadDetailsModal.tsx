@@ -14,7 +14,6 @@ import {
   IconButton,
   MenuItem,
 } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -27,7 +26,7 @@ interface LeadDetailsModalProps {
   onLeadUpdated: () => void; // Callback to refresh lead list
 }
 
-const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({ open, onClose, lead, onLeadUpdated }) => {
+function LeadDetailsModal({ open, onClose, lead, onLeadUpdated }: LeadDetailsModalProps) {
   const [editedLead, setEditedLead] = useState<Lead | null>(lead);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
@@ -221,7 +220,7 @@ const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({ open, onClose, lead
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <Button variant="contained" component="label">
                 Select File
-                <input type="file" hidden onChange={handleFileSelect} />
+                <input type="file" hidden onChange={handleFileSelect} style={{ display: 'none' }} />
               </Button>
               {selectedFile && <Typography variant="body2">{selectedFile.name}</Typography>}
               <Button
@@ -245,7 +244,11 @@ const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({ open, onClose, lead
                        </IconButton>
                     }>
                       <InsertDriveFileIcon sx={{ mr: 1 }} />
-                      <ListItemText primary={<a href={docUrl} target="_blank" rel="noopener noreferrer">{docUrl.split('/').pop()}</a>} />
+                      <ListItemText primary={
+                        <Typography component="a" href={docUrl} target="_blank" rel="noopener noreferrer">
+                          {docUrl.split('/').pop()}
+                        </Typography>
+                      } />
                     </ListItem>
                   ))}
                 </List>
@@ -268,6 +271,6 @@ const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({ open, onClose, lead
       </DialogActions>
     </Dialog>
   );
-};
+}
 
 export default LeadDetailsModal; 

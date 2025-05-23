@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Box, Paper, Typography, List, ListItem, ListItemText } from '@mui/material';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement } from 'chart.js';
 import { Bar, Pie } from 'react-chartjs-2';
+// @ts-ignore
 import moment from 'moment';
 
 ChartJS.register(
