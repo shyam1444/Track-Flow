@@ -26,6 +26,8 @@ interface LeadDetailsModalProps {
   onLeadUpdated: () => void; // Callback to refresh lead list
 }
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
 function LeadDetailsModal({ open, onClose, lead, onLeadUpdated }: LeadDetailsModalProps) {
   const [editedLead, setEditedLead] = useState<Lead | null>(lead);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -54,7 +56,7 @@ function LeadDetailsModal({ open, onClose, lead, onLeadUpdated }: LeadDetailsMod
     formData.append('document_id', editedLead.id);
 
     try {
-      const response = await fetch('http://localhost:8000/upload_document', {
+      const response = await fetch(`${API_BASE_URL}/upload_document`, {
         method: 'POST',
         body: formData,
       });
@@ -80,7 +82,7 @@ function LeadDetailsModal({ open, onClose, lead, onLeadUpdated }: LeadDetailsMod
     if (!editedLead?.id || !documentUrl) return;
 
     try {
-      const response = await fetch('http://localhost:8000/delete_document', {
+      const response = await fetch(`${API_BASE_URL}/delete_document`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -116,7 +118,7 @@ function LeadDetailsModal({ open, onClose, lead, onLeadUpdated }: LeadDetailsMod
     const { documents, ...updatePayload } = editedLead;
 
     try {
-      const response = await fetch(`http://localhost:8000/leads/${editedLead.id}`, {
+      const response = await fetch(`${API_BASE_URL}/leads/${editedLead.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -139,7 +141,7 @@ function LeadDetailsModal({ open, onClose, lead, onLeadUpdated }: LeadDetailsMod
     if (!editedLead?.id) return;
 
     try {
-      const response = await fetch(`http://localhost:8000/leads/${editedLead.id}`, {
+      const response = await fetch(`${API_BASE_URL}/leads/${editedLead.id}`, {
         method: 'DELETE',
       });
 
