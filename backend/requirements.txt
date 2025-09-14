@@ -1,5 +1,9 @@
 fastapi==0.104.1
-uvicorn==0.24.0
-firebase-admin==6.2.0
-python-multipart==0.0.6
-pydantic==2.4.2 
+uvicorn
+firebase-admin
+python-multipart
+pydantic==2.4.2
+PyJWT==2.8.0
+pandas==2.1.3
+python-dotenv
+google-generativeai>=0.3.0

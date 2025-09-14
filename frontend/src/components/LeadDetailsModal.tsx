@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { updateUserData, deleteUserData } from '../utils/userStorage';
 import {
   Dialog,
   DialogTitle,
@@ -13,10 +15,14 @@ import {
   ListItemText,
   IconButton,
   MenuItem,
+  Snackbar,
+  Alert,
+  CircularProgress,
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
 import { Lead } from '../types/lead';
 
 interface LeadDetailsModalProps {
@@ -29,8 +35,11 @@ interface LeadDetailsModalProps {
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 function LeadDetailsModal({ open, onClose, lead, onLeadUpdated }: LeadDetailsModalProps) {
+  const { user } = useAuth();
   const [editedLead, setEditedLead] = useState<Lead | null>(lead);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
 
   useEffect(() => {
     setEditedLead(lead);
@@ -111,60 +120,42 @@ function LeadDetailsModal({ open, onClose, lead, onLeadUpdated }: LeadDetailsMod
     }
   };
 
-  const handleUpdateLead = async () => {
-    if (!editedLead) return;
-
-    const { documents, ...updatePayload } = editedLead;
+  const handleUpdateLead = () => {
+    if (!editedLead || !user?.id) return;
+    setSaving(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/leads/${editedLead.id}/stage`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ stage: editedLead.stage }),
+      // Update lead using user storage
+      updateUserData(user.id, 'leads', editedLead.id, {
+        name: editedLead.name,
+        contact: editedLead.contact,
+        company: editedLead.company,
+        stage: editedLead.stage,
+        follow_up_date: editedLead.follow_up_date,
+        notes: editedLead.notes
       });
 
-      if (response.ok) {
-        // Update other fields
-        const updateResponse = await fetch(`${API_BASE_URL}/leads/${editedLead.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(updatePayload),
-        });
-
-        if (updateResponse.ok) {
-          onClose();
-          onLeadUpdated();
-        } else {
-          console.error('Error updating lead details:', updateResponse.status);
-        }
-      } else {
-        console.error('Error updating lead stage:', response.status);
-      }
+      setSnackbar({ open: true, message: 'Lead details updated!', severity: 'success' });
+      onClose();
+      onLeadUpdated();
     } catch (error) {
-      console.error('Error updating lead:', error);
+      setSnackbar({ open: true, message: 'Error updating lead.', severity: 'error' });
     }
+    setSaving(false);
   };
 
-  const handleDeleteLead = async () => {
-    if (!editedLead?.id) return;
+  const handleDeleteLead = () => {
+    if (!editedLead?.id || !user?.id) return;
 
     if (window.confirm('Are you sure you want to delete this lead? This action cannot be undone.')) {
       try {
-        const response = await fetch(`${API_BASE_URL}/leads/${editedLead.id}`, {
-          method: 'DELETE',
-        });
-
-        if (response.ok) {
-          onClose();
-          onLeadUpdated();
-        } else {
-          console.error('Error deleting lead:', response.status);
-        }
+        deleteUserData(user.id, 'leads', editedLead.id);
+        
+        setSnackbar({ open: true, message: 'Lead deleted successfully!', severity: 'success' });
+        onClose();
+        onLeadUpdated();
       } catch (error) {
+        setSnackbar({ open: true, message: 'Error deleting lead.', severity: 'error' });
         console.error('Error deleting lead:', error);
       }
     }
@@ -172,7 +163,12 @@ function LeadDetailsModal({ open, onClose, lead, onLeadUpdated }: LeadDetailsMod
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{lead ? 'Edit Lead' : 'Lead Details'}</DialogTitle>
+      <DialogTitle>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <EditIcon fontSize="medium" />
+          Edit Lead
+        </Box>
+      </DialogTitle>
       <DialogContent>
         {editedLead && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
@@ -230,45 +226,6 @@ function LeadDetailsModal({ open, onClose, lead, onLeadUpdated }: LeadDetailsMod
               rows={3}
             />
 
-            <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>Documents</Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Button variant="contained" component="label">
-                Select File
-                <input type="file" hidden onChange={handleFileSelect} style={{ display: 'none' }} />
-              </Button>
-              {selectedFile && <Typography variant="body2">{selectedFile.name}</Typography>}
-              <Button
-                variant="outlined"
-                onClick={handleUploadDocument}
-                disabled={!selectedFile || !editedLead?.id}
-                startIcon={<CloudUploadIcon />}
-              >
-                Upload
-              </Button>
-            </Box>
-
-            {editedLead.documents && editedLead.documents.length > 0 && (
-              <Box sx={{ mt: 2 }}>
-                <Typography variant="subtitle1">Uploaded Documents:</Typography>
-                <List dense>
-                  {editedLead.documents.map((docUrl, index) => (
-                    <ListItem key={index} secondaryAction={
-                       <IconButton edge="end" aria-label="delete" onClick={() => handleDeleteDocument(docUrl)}>
-                         <DeleteIcon />
-                       </IconButton>
-                    }>
-                      <InsertDriveFileIcon sx={{ mr: 1 }} />
-                      <ListItemText primary={
-                        <Typography component="a" href={docUrl} target="_blank" rel="noopener noreferrer">
-                          {docUrl.split('/').pop()}
-                        </Typography>
-                      } />
-                    </ListItem>
-                  ))}
-                </List>
-              </Box>
-            )}
-
           </Box>
         )}
       </DialogContent>
@@ -279,10 +236,20 @@ function LeadDetailsModal({ open, onClose, lead, onLeadUpdated }: LeadDetailsMod
               Delete Lead
             </Button>
           )}
-        <Button onClick={handleUpdateLead} variant="contained" color="primary" disabled={!editedLead}>
-          Save Changes
+        <Button onClick={handleUpdateLead} variant="contained" color="primary" disabled={saving} startIcon={saving ? <CircularProgress size={18} /> : null}>
+          {saving ? 'Saving...' : 'Save'}
         </Button>
       </DialogActions>
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Dialog>
   );
 }

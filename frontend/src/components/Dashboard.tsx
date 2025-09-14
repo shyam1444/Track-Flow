@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { getUserData } from '../utils/userStorage';
 import { Box, Paper, Typography, List, ListItem, ListItemText } from '@mui/material';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement } from 'chart.js';
 import { Bar, Pie } from 'react-chartjs-2';
@@ -29,47 +31,59 @@ interface Lead {
 }
 
 const Dashboard = () => {
+  const { user } = useAuth();
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [weeklyFollowUps, setWeeklyFollowUps] = useState<Lead[]>([]);
 
   useEffect(() => {
     fetchMetrics();
     fetchWeeklyFollowUps();
-  }, []);
+  }, [user]);
 
-  const fetchMetrics = async () => {
+  const fetchMetrics = () => {
+    if (!user?.id) return;
+    
     try {
-      const [leadsResponse, ordersResponse] = await Promise.all([
-        fetch('http://localhost:8000/metrics/leads'),
-        fetch('http://localhost:8000/metrics/orders'),
-      ]);
+      const userLeads = getUserData(user.id, 'leads') || [];
+      const userOrders = getUserData(user.id, 'orders') || [];
 
-      const leadsData = await leadsResponse.json();
-      const ordersData = await ordersResponse.json();
+      // Calculate leads by stage
+      const leadsByStage: { [key: string]: number } = {};
+      const stages = ['New', 'Contacted', 'Qualified', 'Proposal Sent', 'Won', 'Lost'];
+      stages.forEach(stage => {
+        leadsByStage[stage] = Array.isArray(userLeads) ? userLeads.filter((lead: any) => lead.stage === stage).length : 0;
+      });
+
+      // Calculate orders by status
+      const ordersByStatus: { [key: string]: number } = {};
+      const statuses = ['Order Received', 'In Development', 'Ready to Dispatch', 'Dispatched'];
+      statuses.forEach(status => {
+        ordersByStatus[status] = Array.isArray(userOrders) ? userOrders.filter((order: any) => order.status === status).length : 0;
+      });
 
       setMetrics({
-        total_leads: leadsData.total_leads,
-        leads_by_stage: leadsData.leads_by_stage,
-        total_orders: ordersData.total_orders,
-        orders_by_status: ordersData.orders_by_status,
+        total_leads: Array.isArray(userLeads) ? userLeads.length : 0,
+        leads_by_stage: leadsByStage,
+        total_orders: Array.isArray(userOrders) ? userOrders.length : 0,
+        orders_by_status: ordersByStatus,
       });
     } catch (error) {
       console.error('Error fetching metrics:', error);
     }
   };
 
-  const fetchWeeklyFollowUps = async () => {
+  const fetchWeeklyFollowUps = () => {
+    if (!user?.id) return;
+    
     try {
-      const response = await fetch('http://localhost:8000/leads/followup');
-      const data: Lead[] = await response.json();
+      const userLeads = getUserData(user.id, 'leads') || [];
       
       const nextWeek = moment().add(7, 'days');
-      const filteredLeads = data.filter(lead => 
+      const filteredLeads = Array.isArray(userLeads) ? userLeads.filter((lead: any) => 
         lead.follow_up_date && moment(lead.follow_up_date).isBefore(nextWeek)
-      );
+      ) : [];
       
       setWeeklyFollowUps(filteredLeads);
-
     } catch (error) {
       console.error('Error fetching weekly follow-ups:', error);
     }

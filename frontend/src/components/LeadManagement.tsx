@@ -1,97 +1,87 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { getUserData, addUserData, updateUserData, deleteUserData } from '../utils/userStorage';
 import {
   Box,
   Typography,
   Button,
-  ButtonGroup,
   Paper,
+  Snackbar,
+  Alert,
 } from '@mui/material';
 import LeadForm from './LeadForm';
 import LeadList from './LeadList';
-import LeadKanban from './LeadKanban'; // Import LeadKanban
-import LeadDetailsModal from './LeadDetailsModal'; // Import LeadDetailsModal
-import { Lead } from '../types/lead'; // Import Lead interface
+import LeadDetailsModal from './LeadDetailsModal';
+import { Lead } from '../types/lead';
 
 const LeadManagement = () => {
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false); // State for details modal
-  const [selectedLeadForDetails, setSelectedLeadForDetails] = useState<Lead | null>(null); // State for selected lead
+  const { user } = useAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [currentView, setCurrentView] = useState<'list' | 'kanban'>('list');
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' as 'success' | 'error' });
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
+  const [selectedLeadForDetails, setSelectedLeadForDetails] = useState<Lead | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const fetchLeads = async () => {
-    try {
-      const response = await fetch('http://localhost:8000/leads');
-      const data: Lead[] = await response.json();
-      setLeads(data);
-    } catch (error) {
-      console.error('Error fetching leads:', error);
+  const fetchLeads = () => {
+    if (user?.id) {
+      const userLeads = getUserData(user.id, 'leads');
+      setLeads(userLeads);
     }
   };
 
   useEffect(() => {
     fetchLeads();
-  }, []);
+  }, [user]);
 
-  const handleLeadAdded = async (leadData: { name: string; email: string; phone: string; company?: string; notes?: string; follow_up_date?: string }) => {
-    const backendPayload = {
-      name: leadData.name,
-      contact: leadData.phone,
-      company: leadData.company,
-      follow_up_date: leadData.follow_up_date || null,
-      notes: leadData.notes,
-    };
-
+  const handleLeadAdded = (leadData: { name: string; email: string; phone: string; company?: string; notes?: string; follow_up_date?: string }) => {
+    if (!user?.id) return;
+    
     try {
-      const response = await fetch('http://localhost:8000/leads', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(backendPayload),
+      const newLead = addUserData(user.id, 'leads', {
+        name: leadData.name,
+        email: leadData.email,
+        contact: leadData.phone,
+        company: leadData.company || '',
+        follow_up_date: leadData.follow_up_date || null,
+        notes: leadData.notes || '',
+        status: 'New'
       });
-      if (response.ok) {
-        setIsFormOpen(false);
-        fetchLeads();
-      } else {
-        console.error('Error adding lead:', response.status);
-      }
+      
+      setIsFormOpen(false);
+      fetchLeads();
+      setSnackbar({ open: true, message: 'Lead added successfully.', severity: 'success' });
     } catch (error) {
+      setSnackbar({ open: true, message: 'Error adding lead.', severity: 'error' });
       console.error('Error adding lead:', error);
     }
   };
 
-   const handleLeadStageChange = async (leadId: string, newStage: string) => {
+  const handleDeleteLead = (leadId: string) => {
+    if (!user?.id) return;
+    
     try {
-      const response = await fetch(`http://localhost:8000/leads/${leadId}/stage`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ stage: newStage }),
-      });
-
-      if (response.ok) {
-        fetchLeads();
-      } else {
-        console.error('Error updating lead stage:', response.status);
-      }
+      deleteUserData(user.id, 'leads', leadId);
+      fetchLeads();
+      setSnackbar({ open: true, message: 'Lead deleted successfully.', severity: 'success' });
     } catch (error) {
-      console.error('Error updating lead stage:', error);
+      setSnackbar({ open: true, message: 'Error deleting lead.', severity: 'error' });
+      console.error('Error deleting lead:', error);
     }
   };
 
-  const handleLeadClick = (lead: Lead) => { // Handler to open details modal
+  const handleLeadClick = (lead: Lead) => {
     setSelectedLeadForDetails(lead);
     setIsDetailsModalOpen(true);
   };
 
-  const handleDetailsModalClose = () => { // Handler to close details modal
+  const handleDetailsModalClose = () => {
     setIsDetailsModalOpen(false);
     setSelectedLeadForDetails(null);
-    fetchLeads(); // Refresh leads after potential update/delete
+    fetchLeads();
   };
-
 
   return (
     <Box sx={{ p: 3 }}>
@@ -99,51 +89,42 @@ const LeadManagement = () => {
         <Typography variant="h4" gutterBottom>
           Lead Management
         </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-           <ButtonGroup variant="contained" aria-label="view toggle button group" sx={{ mr: 2 }}>
-            <Button
-              onClick={() => setCurrentView('list')}
-              variant={currentView === 'list' ? 'contained' : 'outlined'}
-            >
-              List View
-            </Button>
-            <Button
-              onClick={() => setCurrentView('kanban')}
-              variant={currentView === 'kanban' ? 'contained' : 'outlined'}
-            >
-              Kanban View
-            </Button>
-          </ButtonGroup>
-           <Button
-            variant="contained"
-            color="primary"
-            onClick={() => setIsFormOpen(true)}
-          >
-            Add New Lead
-          </Button>
-        </Box>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={() => setIsFormOpen(true)}
+        >
+          Add New Lead
+        </Button>
       </Box>
-
       <Paper sx={{ p: 2 }}>
-        {currentView === 'list' ? (
-          <LeadList leads={leads} onLeadUpdated={fetchLeads} fetchLeads={fetchLeads} onLeadClick={handleLeadClick} />
-        ) : (
-          <LeadKanban leads={leads} onStageChange={handleLeadStageChange} onLeadClick={handleLeadClick} />
-        )}
+        <LeadList
+          leads={leads}
+          onLeadUpdated={fetchLeads}
+          fetchLeads={async () => fetchLeads()}
+          onLeadClick={handleLeadClick}
+          onLeadDelete={(lead) => handleDeleteLead(lead.id)}
+          loading={loading}
+          error={error}
+          onAddLead={() => setIsFormOpen(true)}
+        />
       </Paper>
-
       <LeadForm
         open={isFormOpen}
         onClose={() => setIsFormOpen(false)}
         onSubmit={handleLeadAdded}
       />
-
       <LeadDetailsModal
         open={isDetailsModalOpen}
         onClose={handleDetailsModalClose}
         lead={selectedLeadForDetails}
         onLeadUpdated={fetchLeads}
       />
+      <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

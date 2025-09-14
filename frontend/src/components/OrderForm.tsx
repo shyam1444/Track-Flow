@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Snackbar, Alert } from '@mui/material';
 
 interface Lead {
   id: string;
@@ -16,6 +17,7 @@ const OrderForm: React.FC<OrderFormProps> = ({ onOrderAdded }) => {
   const [dispatchDate, setDispatchDate] = useState('');
   const [trackingInfo, setTrackingInfo] = useState('');
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
 
   useEffect(() => {
     // Fetch leads to allow selection for the order
@@ -69,22 +71,25 @@ const OrderForm: React.FC<OrderFormProps> = ({ onOrderAdded }) => {
         body: JSON.stringify(newOrder),
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (response.ok) {
+        setSelectedLeadId('');
+        setStatus('Order Received');
+        setDispatchDate('');
+        setTrackingInfo('');
+        setErrors({});
+        setSnackbar({ open: true, message: 'Order added successfully.', severity: 'success' });
+        onOrderAdded(); // Notify the parent component to refresh the list
+      } else {
+        const data = await response.json();
+        if (response.status === 400 && data.detail && data.detail.includes('already exists')) {
+          setSnackbar({ open: true, message: data.detail, severity: 'error' });
+        } else {
+          setSnackbar({ open: true, message: data.detail || 'Error adding order.', severity: 'error' });
+        }
       }
 
-      // Clear the form after successful submission
-      setSelectedLeadId('');
-      setStatus('Order Received');
-      setDispatchDate('');
-      setTrackingInfo('');
-      setErrors({});
-
-      onOrderAdded(); // Notify the parent component to refresh the list
-
     } catch (error) {
-      console.error('Error adding order:', error);
-      // Optionally show an error message
+      setSnackbar({ open: true, message: 'Error adding order.', severity: 'error' });
     }
   };
 
@@ -118,6 +123,11 @@ const OrderForm: React.FC<OrderFormProps> = ({ onOrderAdded }) => {
         <input id="trackingInfo" type="text" value={trackingInfo} onChange={(e) => setTrackingInfo(e.target.value)} />
       </div>
       <button type="submit">Add Order</button>
+      <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar({ ...snackbar, open: false })} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </form>
   );
 };

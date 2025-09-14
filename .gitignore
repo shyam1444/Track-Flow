@@ -68,3 +68,6 @@ assignment3-2865c-63775c0b75a2.json
 /build
 /dist
 *.log 
+
+# Firebase service account key
+backend/assignment3-2865c-dc4d015bc7df.json 

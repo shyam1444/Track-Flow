@@ -9,11 +9,16 @@ import {
   TableHead,
   TableRow,
   IconButton,
-  Menu,
-  MenuItem,
   Typography,
+  CircularProgress,
+  Button,
+  Snackbar,
+  Alert,
+  Checkbox,
 } from '@mui/material';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { Lead } from '../types/lead';
 
 interface LeadListProps {
@@ -21,72 +26,116 @@ interface LeadListProps {
   leads: Lead[];
   fetchLeads: () => Promise<void>;
   onLeadClick: (lead: Lead) => void;
+  onLeadDelete?: (lead: Lead) => void;
+  loading?: boolean;
+  error?: string | null;
+  onAddLead?: () => void;
 }
 
 const stages = ['New', 'Contacted', 'Qualified', 'Proposal Sent', 'Won', 'Lost'];
 
-const LeadList: React.FC<LeadListProps> = ({ onLeadUpdated, leads, fetchLeads, onLeadClick }) => {
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+const LeadList: React.FC<LeadListProps> = ({ onLeadUpdated, leads, fetchLeads, onLeadClick, onLeadDelete, loading, error, onAddLead }) => {
+  const [actionLoading, setActionLoading] = useState(false);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
+  const [importing, setImporting] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
 
-  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, lead: Lead) => {
-    setAnchorEl(event.currentTarget);
-    setSelectedLead(lead);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-    setSelectedLead(null);
-  };
-
-  const handleStageChange = async (newStage: string) => {
-    if (!selectedLead) return;
-
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!(file.name.endsWith('.csv') || file.name.endsWith('.xlsx'))) {
+      setSnackbar({ open: true, message: 'Only CSV or Excel files are accepted.', severity: 'error' });
+      return;
+    }
+    setImporting(true);
+    const formData = new FormData();
+    formData.append('file', file);
     try {
-      const response = await fetch(`http://localhost:8000/leads/${selectedLead.id}/stage`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ stage: newStage }),
+      const res = await fetch('http://localhost:8000/import/leads', {
+        method: 'POST',
+        body: formData,
       });
-
-      if (response.ok) {
+      const data = await res.json();
+      if (res.ok) {
+        setSnackbar({ open: true, message: `Imported ${data.imported} leads, Skipped ${data.skipped} rows.`, severity: 'success' });
         fetchLeads();
         onLeadUpdated();
+      } else {
+        setSnackbar({ open: true, message: data.error ? data.error : 'Import failed.', severity: 'error' });
       }
-    } catch (error) {
-      console.error('Error updating lead stage:', error);
+    } catch (err) {
+      setSnackbar({ open: true, message: 'Import failed.', severity: 'error' });
     }
-
-    handleMenuClose();
+    setImporting(false);
   };
 
-  const handleDeleteLead = async () => {
-    if (!selectedLead) return;
-
-    try {
-      const response = await fetch(`http://localhost:8000/leads/${selectedLead.id}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        fetchLeads(); // Refresh leads after deletion
-        onLeadUpdated();
-      }
-    } catch (error) {
-      console.error('Error deleting lead:', error);
+  const handleSelectAll = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.checked) {
+      setSelected(leads.map((lead) => lead.id));
+    } else {
+      setSelected([]);
     }
+  };
 
-    handleMenuClose();
+  const handleSelect = (id: string) => {
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id]
+    );
+  };
+
+  const handleDeleteSelected = async () => {
+    setActionLoading(true);
+    let deleted = 0;
+    for (const id of selected) {
+      try {
+        const res = await fetch(`http://localhost:8000/leads/${id}`, { method: 'DELETE' });
+        if (res.ok) deleted++;
+      } catch {}
+    }
+    setSnackbar({ open: true, message: `Deleted ${deleted} leads.`, severity: 'success' });
+    setSelected([]);
+    fetchLeads();
+    setActionLoading(false);
   };
 
   return (
     <Box>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2, gap: 2 }}>
+        <Button
+          variant="outlined"
+          component="label"
+          startIcon={<UploadFileIcon />}
+          disabled={importing}
+        >
+          Import Leads
+          <input
+            type="file"
+            accept=".csv,.xlsx"
+            hidden
+            onChange={handleImport}
+          />
+        </Button>
+        <Button
+          variant="contained"
+          color="error"
+          disabled={selected.length === 0 || actionLoading}
+          onClick={handleDeleteSelected}
+        >
+          Delete Selected
+        </Button>
+      </Box>
       <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
         <Table>
           <TableHead>
             <TableRow>
+              <TableCell padding="checkbox">
+                <Checkbox
+                  indeterminate={selected.length > 0 && selected.length < leads.length}
+                  checked={leads.length > 0 && selected.length === leads.length}
+                  onChange={handleSelectAll}
+                  inputProps={{ 'aria-label': 'select all leads' }}
+                />
+              </TableCell>
               <TableCell>Name</TableCell>
               <TableCell>Contact</TableCell>
               <TableCell>Company</TableCell>
@@ -96,33 +145,50 @@ const LeadList: React.FC<LeadListProps> = ({ onLeadUpdated, leads, fetchLeads, o
             </TableRow>
           </TableHead>
           <TableBody>
-            {leads.length === 0 ? (
+            {loading ? (
               <TableRow>
-                <TableCell colSpan={6} align="center">
-                  <Typography variant="subtitle1" color="textSecondary">
+                <TableCell colSpan={7} align="center">
+                  <CircularProgress />
+                </TableCell>
+              </TableRow>
+            ) : error ? (
+              <TableRow>
+                <TableCell colSpan={7} align="center">
+                  <Typography variant="subtitle1" color="error">
+                    {error}
+                  </Typography>
+                </TableCell>
+              </TableRow>
+            ) : leads.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} align="center">
+                  <Typography variant="subtitle1" color="textSecondary" sx={{ mb: 2 }}>
                     No leads available.
                   </Typography>
+                  {onAddLead && (
+                    <Button variant="contained" color="primary" onClick={onAddLead}>
+                      Add New Lead
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
             ) : (
               leads.map((lead) => (
-                <TableRow
-                  key={lead.id}
-                  onClick={() => onLeadClick(lead)}
-                  sx={{ cursor: 'pointer' }}
-                >
+                <TableRow key={lead.id} selected={selected.includes(lead.id)}>
+                  <TableCell padding="checkbox">
+                    <Checkbox
+                      checked={selected.includes(lead.id)}
+                      onChange={() => handleSelect(lead.id)}
+                      inputProps={{ 'aria-label': `select lead ${lead.name}` }}
+                    />
+                  </TableCell>
                   <TableCell>{lead.name}</TableCell>
                   <TableCell>{lead.contact}</TableCell>
                   <TableCell>{lead.company}</TableCell>
                   <TableCell>{lead.stage}</TableCell>
                   <TableCell>{lead.created_at ? new Date(lead.created_at).toLocaleDateString() : 'N/A'}</TableCell>
                   <TableCell>
-                    <IconButton
-                      size="small"
-                      onClick={(e) => handleMenuOpen(e, lead)}
-                    >
-                      <MoreVertIcon />
-                    </IconButton>
+                    <IconButton size="small" onClick={() => onLeadClick(lead)}><EditIcon /></IconButton>
                   </TableCell>
                 </TableRow>
               ))
@@ -130,25 +196,16 @@ const LeadList: React.FC<LeadListProps> = ({ onLeadUpdated, leads, fetchLeads, o
           </TableBody>
         </Table>
       </TableContainer>
-
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={handleMenuClose}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        {stages.map((stage) => (
-          <MenuItem
-            key={stage}
-            onClick={() => handleStageChange(stage)}
-            disabled={selectedLead?.stage === stage}
-          >
-            Move to {stage}
-          </MenuItem>
-        ))}
-        <MenuItem onClick={handleDeleteLead} sx={{ color: 'error.main' }}>
-          Delete Lead
-        </MenuItem>
-      </Menu>
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

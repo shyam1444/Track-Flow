@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { getUserData, addUserData, updateUserData, deleteUserData } from '../utils/userStorage';
 import {
   Box,
   Paper,
@@ -20,10 +22,16 @@ import {
   ListItem,
   ListItemText,
   IconButton,
+  Snackbar,
+  Alert,
+  CircularProgress,
 } from '@mui/material';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
+import OrderList from './OrderList';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 
 interface Order {
   id: string;
@@ -42,6 +50,7 @@ interface Lead {
 const statuses = ['Order Received', 'In Development', 'Ready to Dispatch', 'Dispatched'];
 
 const OrderManagement = () => {
+  const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [open, setOpen] = useState(false);
@@ -51,53 +60,56 @@ const OrderManagement = () => {
     status: 'Order Received',
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [statusLoading, setStatusLoading] = useState<string | null>(null); // orderId being updated
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({ open: false, message: '', severity: 'success' });
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [lastImportInfo, setLastImportInfo] = useState<{imported: number, skipped: number} | null>(null);
 
   useEffect(() => {
     fetchOrders();
     fetchLeads();
-  }, []);
+  }, [user]);
 
-  const fetchOrders = async () => {
-    try {
-      const response = await fetch('http://localhost:8000/orders');
-      const data = await response.json();
-      setOrders(data);
-    } catch (error) {
-      console.error('Error fetching orders:', error);
+  const fetchOrders = () => {
+    if (user?.id) {
+      const userOrders = getUserData(user.id, 'orders');
+      setOrders(userOrders);
     }
   };
 
-  const fetchLeads = async () => {
-    try {
-      const response = await fetch('http://localhost:8000/leads');
-      const data = await response.json();
-      setLeads(data);
-    } catch (error) {
-      console.error('Error fetching leads:', error);
+  const fetchLeads = () => {
+    if (user?.id) {
+      const userLeads = getUserData(user.id, 'leads');
+      setLeads(userLeads);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user?.id || !newOrder.lead_id) return;
+    
     try {
-      const response = await fetch('http://localhost:8000/orders', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(newOrder),
+      addUserData(user.id, 'orders', {
+        lead_id: newOrder.lead_id,
+        status: newOrder.status || 'Order Received',
+        dispatch_date: newOrder.dispatch_date,
+        tracking_info: newOrder.tracking_info
       });
-      if (response.ok) {
-        setOpen(false);
-        setNewOrder({ status: 'Order Received' });
-        fetchOrders();
-      }
+      
+      setOpen(false);
+      setNewOrder({ status: 'Order Received' });
+      fetchOrders();
+      setSnackbar({ open: true, message: 'Order created successfully!', severity: 'success' });
     } catch (error) {
+      setSnackbar({ open: true, message: 'Error creating order.', severity: 'error' });
       console.error('Error creating order:', error);
     }
   };
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
+    setStatusLoading(orderId);
     try {
       const response = await fetch(`http://localhost:8000/orders/${orderId}/status`, {
         method: 'PUT',
@@ -108,49 +120,49 @@ const OrderManagement = () => {
       });
       if (response.ok) {
         fetchOrders();
+        setSnackbar({ open: true, message: 'Order status updated.', severity: 'success' });
+      } else {
+        setSnackbar({ open: true, message: 'Failed to update order status.', severity: 'error' });
       }
     } catch (error) {
-      console.error('Error updating order status:', error);
+      setSnackbar({ open: true, message: 'Error updating order status.', severity: 'error' });
     }
+    setStatusLoading(null);
   };
 
-  const handleDetailsUpdate = async () => {
-    if (!selectedOrder) return;
-
-    const { documents, ...updatePayload } = selectedOrder;
+  const handleDetailsUpdate = () => {
+    if (!selectedOrder || !user?.id) return;
 
     try {
-      const response = await fetch(`http://localhost:8000/orders/${selectedOrder.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(updatePayload),
+      updateUserData(user.id, 'orders', selectedOrder.id, {
+        status: selectedOrder.status,
+        dispatch_date: selectedOrder.dispatch_date,
+        tracking_info: selectedOrder.tracking_info
       });
-      if (response.ok) {
-        setDetailsOpen(false);
-        fetchOrders();
-      }
+      
+      setDetailsOpen(false);
+      fetchOrders();
+      setSnackbar({ open: true, message: 'Order updated successfully!', severity: 'success' });
     } catch (error) {
+      setSnackbar({ open: true, message: 'Error updating order.', severity: 'error' });
       console.error('Error updating order details:', error);
     }
   };
 
-  const handleDeleteOrder = async () => {
-    if (!selectedOrder) return;
-
+  const handleDeleteOrder = () => {
+    if (!selectedOrder || !user?.id) return;
+    setDeleteLoading(true);
+    
     try {
-      const response = await fetch(`http://localhost:8000/orders/${selectedOrder.id}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        setDetailsOpen(false);
-        fetchOrders();
-      }
+      deleteUserData(user.id, 'orders', selectedOrder.id);
+      setDetailsOpen(false);
+      fetchOrders();
+      setSnackbar({ open: true, message: 'Order deleted successfully!', severity: 'success' });
     } catch (error) {
-      console.error('Error deleting order:', error);
+      setSnackbar({ open: true, message: 'Error deleting order.', severity: 'error' });
     }
+    setDeleteLoading(false);
+    setConfirmDelete(false);
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -219,6 +231,37 @@ const OrderManagement = () => {
     }
   };
 
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!(file.name.endsWith('.csv') || file.name.endsWith('.xlsx'))) {
+      setSnackbar({ open: true, message: 'Only CSV or Excel files are accepted.', severity: 'error' });
+      return;
+    }
+    setImporting(true);
+    const formData = new FormData();
+    formData.append('file', file);
+    try {
+      const res = await fetch('http://localhost:8000/import/orders', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSnackbar({ open: true, message: `Imported ${data.imported} orders, Skipped ${data.skipped} rows.`, severity: 'success' });
+        setLastImportInfo({imported: data.imported, skipped: data.skipped});
+        fetchOrders();
+      } else {
+        setSnackbar({ open: true, message: data.error ? data.error : 'Import failed.', severity: 'error' });
+        setLastImportInfo(null);
+      }
+    } catch (err) {
+      setSnackbar({ open: true, message: 'Import failed.', severity: 'error' });
+      setLastImportInfo(null);
+    }
+    setImporting(false);
+  };
+
   const getLeadName = (leadId: string) => {
     const lead = leads.find(l => l.id === leadId);
     return lead ? lead.name : 'Unknown Lead';
@@ -234,67 +277,14 @@ const OrderManagement = () => {
           Add New Order
         </Button>
       </Box>
-
       <Paper sx={{ p: 2 }}>
-        <TableContainer component={Paper} sx={{ overflowX: 'auto' }}>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Order ID</TableCell>
-                <TableCell>Lead</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Dispatch Date</TableCell>
-                <TableCell>Tracking Info</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {orders.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} align="center">
-                    <Typography variant="subtitle1" color="textSecondary">
-                      No orders available.
-                    </Typography>
-                  </TableCell>
-                </TableRow>
-              ) : (
-                orders.map((order) => (
-                  <TableRow key={order.id}>
-                    <TableCell>{order.id}</TableCell>
-                    <TableCell>{getLeadName(order.lead_id)}</TableCell>
-                    <TableCell>
-                      <TextField
-                        select
-                        value={order.status}
-                        onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                        size="small"
-                      >
-                        {statuses.map((status) => (
-                          <MenuItem key={status} value={status}>
-                            {status}
-                          </MenuItem>
-                        ))}
-                      </TextField>
-                    </TableCell>
-                    <TableCell>{order.dispatch_date || 'Not dispatched'}</TableCell>
-                    <TableCell>{order.tracking_info || 'No tracking info'}</TableCell>
-                    <TableCell>
-                      <Button
-                        size="small"
-                        onClick={() => {
-                          setSelectedOrder(order);
-                          setDetailsOpen(true);
-                        }}
-                      >
-                        View Details
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
+        <OrderList
+          orders={orders}
+          loading={false}
+          error={null}
+          fetchOrders={fetchOrders}
+          onOrderSelected={(order) => { setSelectedOrder(order); setDetailsOpen(true); }}
+        />
       </Paper>
 
       <Dialog open={open} onClose={() => setOpen(false)}>
@@ -386,41 +376,6 @@ const OrderManagement = () => {
                 fullWidth
               />
 
-              <Typography variant="h6" sx={{ mt: 2, mb: 1 }}>Documents</Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <Button variant="contained" component="label">
-                  Select File
-                  <input type="file" hidden onChange={handleFileSelect} />
-                </Button>
-                {selectedFile && <Typography variant="body2">{selectedFile.name}</Typography>}
-                <Button
-                  variant="outlined"
-                  onClick={handleUploadDocument}
-                  disabled={!selectedFile || !selectedOrder?.id}
-                  startIcon={<CloudUploadIcon />}
-                >
-                  Upload
-                </Button>
-              </Box>
-
-              {selectedOrder.documents && selectedOrder.documents.length > 0 && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="subtitle1">Uploaded Documents:</Typography>
-                  <List dense>
-                    {selectedOrder.documents.map((docUrl, index) => (
-                      <ListItem key={index} secondaryAction={
-                         <IconButton edge="end" aria-label="delete" onClick={() => handleDeleteDocument(docUrl)}>
-                          <DeleteIcon />
-                        </IconButton>
-                      }>
-                        <InsertDriveFileIcon sx={{ mr: 1 }} />
-                        <ListItemText primary={<a href={docUrl} target="_blank" rel="noopener noreferrer">{docUrl.split('/').pop()}</a>} />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Box>
-              )}
-
             </Box>
           )}
         </DialogContent>
@@ -429,11 +384,30 @@ const OrderManagement = () => {
           <Button onClick={handleDetailsUpdate} variant="contained" color="primary">
             Save Changes
           </Button>
-          <Button onClick={handleDeleteOrder} variant="outlined" color="error">
-            Delete Order
+        </DialogActions>
+      </Dialog>
+      <Dialog open={confirmDelete} onClose={() => setConfirmDelete(false)}>
+        <DialogTitle>Confirm Delete</DialogTitle>
+        <DialogContent>
+          <Typography>Are you sure you want to delete this order? This action cannot be undone.</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setConfirmDelete(false)}>Cancel</Button>
+          <Button onClick={handleDeleteOrder} color="error" variant="contained" disabled={deleteLoading} startIcon={deleteLoading ? <CircularProgress size={18} /> : null}>
+            {deleteLoading ? 'Deleting...' : 'Delete'}
           </Button>
         </DialogActions>
       </Dialog>
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={3000}
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity} sx={{ width: '100%' }}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
